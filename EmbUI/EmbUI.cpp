@@ -325,16 +325,6 @@ void EmbUI::begin(){
             #endif
             LOG(printf_P, PSTR("Updating %s, file size:%u\n"), (type == U_FLASH)? F("Firmware") : F("Filesystem"), request->contentLength());
 
-            #ifdef ESP8266
-                Update.runAsync(true);
-                // TODO: разобраться почему под littlefs образ генерится чуть больше чем размер доступной памяти по константам
-                size_t size = (type == U_FLASH)? request->contentLength() : (uintptr_t)&_FS_end - (uintptr_t)&_FS_start;
-            #endif
-            #ifdef ESP32
-                size_t size = (type == U_FLASH)? request->contentLength() : UPDATE_SIZE_UNKNOWN;
-            #endif
-            LOG(printf_P, PSTR("Updating %s, file size:%u\n"), (type == U_FLASH)? F("Firmware") : F("Filesystem"), request->contentLength());
-
             if (!Update.begin(size, type)) {
                 Update.printError(Serial);
             }
@@ -351,7 +341,7 @@ void EmbUI::begin(){
                 Update.printError(Serial);
             }
         }
-        embui.uploadProgress(index + len, request->contentLength());
+        uploadProgress(index + len, request->contentLength());
     });
 
     //First request will return 0 results unless you start scan from somewhere else (loop/setup)

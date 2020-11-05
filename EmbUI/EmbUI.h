@@ -316,11 +316,6 @@ class EmbUI
     callback_function_t _cb_STADisconnected = nullptr;
     callback_function_t _cb_STAGotIP = nullptr;
 
-    /*
-     * OTA update progress, return upload %
-     */
-    uint8_t uploadProgress(size_t len, size_t total);
-
 #ifdef USE_SSDP
     void ssdp_begin() {
           String hn = param(FPSTR(P_hostname));
