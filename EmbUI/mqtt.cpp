@@ -7,12 +7,29 @@
 extern EmbUI embui;
 
 void EmbUI::connectToMqtt() {
-  LOG(println, PSTR("UI: Connecting to MQTT..."));
-  mqttClient.connect();
+    LOG(println, PSTR("UI: Connecting to MQTT..."));
+
+    m_pref=param(FPSTR(P_m_pref));
+    m_host=param(FPSTR(P_m_host));
+    m_port=param(FPSTR(P_m_port));
+    m_user=param(FPSTR(P_m_user));
+    m_pass=param(FPSTR(P_m_pass));
+    
+    IPAddress ip; 
+    bool isIP = ip.fromString(m_host);
+    mqttClient.setCredentials(m_user.c_str(), m_pass.c_str());
+    if(isIP)
+        mqttClient.setServer(ip, m_port.toInt());
+    else
+        mqttClient.setServer(m_host.c_str(), m_port.toInt());
+
+    mqttClient.setClientId(m_pref.isEmpty() ? mc : m_pref.c_str());
+    
+    mqttClient.connect();
 }
 
 String EmbUI::id(const String &topic){
-    String ret = param(FPSTR(P_m_pref));
+    String ret = m_pref;
     if (ret.isEmpty()) return topic;
 
     ret += '/'; ret += topic;
@@ -42,11 +59,11 @@ void EmbUI::mqtt(const String &pref, const String &host, int port, const String 
         LOG(println, PSTR("UI: MQTT host is empty - disabled!"));
         return;   // выходим если host не задан
     }
-    String m_pref=param(FPSTR(P_m_pref));
-    String m_host=param(FPSTR(P_m_host));
-    String m_port=param(FPSTR(P_m_port));
-    String m_user=param(FPSTR(P_m_user));
-    String m_pass=param(FPSTR(P_m_pass));
+    m_pref=param(FPSTR(P_m_pref));
+    m_host=param(FPSTR(P_m_host));
+    m_port=param(FPSTR(P_m_port));
+    m_user=param(FPSTR(P_m_user));
+    m_pass=param(FPSTR(P_m_pass));
     IPAddress ip; 
     bool isIP = ip.fromString(m_host);
 
@@ -67,6 +84,7 @@ void EmbUI::mqtt(const String &pref, const String &host, int port, const String 
     mqttClient.onUnsubscribe(onMqttUnsubscribe);
     mqttClient.onMessage(onMqttMessage);
     mqttClient.onPublish(onMqttPublish);
+    mqttClient.setClientId(m_pref.isEmpty() ? mc : m_pref.c_str());
     mqttClient.setCredentials(m_user.c_str(), m_pass.c_str());
     if(isIP)
         mqttClient.setServer(ip, m_port.toInt());
@@ -134,6 +152,10 @@ void EmbUI::mqtt_handle(){
     mqtt_reconnect();
 }
 
+void EmbUI::mqttReconnect(){ // принудительный реконнект, при смене чего-либо в UI
+    sysData.mqtt_connected = false;
+}
+
 /*
  * TODO: убрать этот бардак в планировщик
  */
@@ -145,7 +167,7 @@ void EmbUI::mqtt_reconnect(){
 }
 
 void EmbUI::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println(F("Disconnected from MQTT."));
+  LOG(println,F("UI: Disconnected from MQTT."));
   embui.sysData.mqtt_connect = false;
   embui.sysData.mqtt_connected = false;
 }
@@ -157,15 +179,15 @@ void EmbUI::_onMqttConnect(bool sessionPresent) {
 void EmbUI::onMqttConnect(){
     sysData.mqtt_connect = false;
     sysData.mqtt_connected = true;
-    Serial.println(F("Connected to MQTT."));
+    LOG(println,F("UI: Connected to MQTT."));
     if(sysData.mqtt_remotecontrol){
         subscribeAll();
     }
 }
 
 void EmbUI::onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-    LOG(print, F("Publish received: "));
-    Serial.println(topic);
+    LOG(print, F("UI: Publish received: "));
+    LOG(println, topic);
 
     char buffer[len + 2];
     memset(buffer, 0, sizeof(buffer));
@@ -201,10 +223,10 @@ void EmbUI::subscribeAll(bool isOnlyGetSet){
     if(isOnlyGetSet){
         mqttClient.subscribe(id(F("embui/set/#")).c_str(), 0);
         mqttClient.subscribe(id(F("embui/get/#")).c_str(), 0);
-        LOG(println, F("Subscribe embui/get/# & embui/set/#"));
+        LOG(println, F("UI: Subscribe embui/get/# & embui/set/#"));
     } else {
         mqttClient.subscribe(id(F("embui/#")).c_str(), 0);
-        LOG(println, F("Subscribe All (embui/#)"));
+        LOG(println, F("UI: Subscribe All (embui/#)"));
     }
 }
 

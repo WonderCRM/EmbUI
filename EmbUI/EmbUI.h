@@ -114,7 +114,7 @@ class Interface;
 void __attribute__((weak)) section_main_frame(Interface *interf, JsonObject *data);
 void __attribute__((weak)) pubCallback(Interface *interf);
 String __attribute__((weak)) httpCallback(const String &param, const String &value, bool isset);
-void __attribute__((weak)) uploadProgress(size_t len, size_t total);
+uint8_t __attribute__((weak)) uploadProgress(size_t len, size_t total);
 void __attribute__((weak)) create_parameters();
 
 //----------------------
@@ -203,6 +203,12 @@ class EmbUI
 
     char mc[7]; // id из последних 3 байт mac-адреса "ffffff"
 
+    String m_pref; // к сожалению они нужны, т.к. в клиент передаются указатели на уже имеющийся объект, значит на конфиг ссылку отдавать нельзя!!!
+    String m_host;
+    String m_port;
+    String m_user;
+    String m_pass;
+
     void var(const String &key, const String &value, bool force = false);
     void var_create(const String &key, const String &value);
     void section_handle_add(const String &btn, buttonCallback response);
@@ -230,7 +236,7 @@ class EmbUI
     void mqtt(const String &pref, const String &host, int port, const String &user, const String &pass, void (*mqttFunction) (const String &topic, const String &payload), void (*mqttConnect) ());
     void mqtt(const String &host, int port, const String &user, const String &pass, void (*mqttFunction) (const String &topic, const String &payload), void (*mqttConnect) ());
     void mqtt(const String &host, int port, const String &user, const String &pass, void (*mqttFunction) (const String &topic, const String &payload), void (*mqttConnect) (), bool remotecontrol);
-    void mqtt_reconnect();
+    void mqttReconnect();
     void subscribe(const String &topic);
     void publish(const String &topic, const String &payload);
     void publish(const String &topic, const String &payload, bool retained);
@@ -267,7 +273,8 @@ class EmbUI
     void pub_mqtt(const String &key, const String &value);
     void mqtt_handle();
     void subscribeAll(bool isOnlyGetSet=true);
-
+    void mqtt_reconnect();
+    
     /**
       * устанавлием режим WiFi
       */
