@@ -24,6 +24,7 @@
 #endif
 
 #define TZ_DEFAULT PSTR("GMT0")         // default Time-Zone
+static const char P_LOC[] PROGMEM = "LOC";
 
 TimeProcessor::TimeProcessor()
 {
@@ -122,9 +123,31 @@ void TimeProcessor::setTime(const String &timestr){
 void TimeProcessor::tzsetup(const char* tz){
     // https://stackoverflow.com/questions/56412864/esp8266-timezone-issues
     if (!tz || !*tz)
-             return;
+        return;
 
-    setenv("TZ", tz, 1/*overwrite*/);
+    /*
+     * newlib has issues with TZ strings with quoted <+-nn> names 
+     * this has been fixed in https://github.com/esp8266/Arduino/pull/7702 for esp8266 (still not in stable as of Nov 16 2020)
+     * but it also affects ESP32 and who knows when to expect a fix there
+     * So let's fix such zones in-place untill core support for both platforms available
+     */
+    if (tz[0] == 0x3C){     // check if first char is '<'
+      String _tz(tz);
+      String _tzfix((char *)0);
+      _tzfix.reserve(sizeof(tz)) ;
+      _tzfix += FPSTR(P_LOC);
+      if (_tz.indexOf('<',1) > 0){  // there might be two <> quotes
+    	LOG(print, "2nd pos: "); LOG(println, _tz.indexOf('<',1)); 
+        _tzfix += _tz.substring(_tz.indexOf('>')+1, _tz.indexOf('<',1));
+        _tzfix += FPSTR(P_LOC);
+      }
+      _tzfix += _tz.substring(_tz.lastIndexOf('>')+1, _tz.length());
+      setenv("TZ", _tzfix.c_str(), 1/*overwrite*/);
+      LOG(printf_P, PSTR("TIME: TZ fix applied: %s\n"), _tzfix.c_str());
+    } else {
+      setenv("TZ", tz, 1/*overwrite*/);
+    }
+
     tzset();
     tzone = ""; // сбрасываем костыльную зону
     usehttpzone = false;  // запрещаем использование http
