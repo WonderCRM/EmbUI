@@ -100,6 +100,7 @@ void EmbUI::WiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info)
         }
 
         embuischedw.detach();
+        sysData.wifi_sta = true;
         setup_mDns();
         if(_cb_STAGotIP)
             _cb_STAGotIP();        // execule callback
@@ -113,6 +114,8 @@ void EmbUI::WiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info)
                                                         LOG(println, F("UI WiFi: Switch to AP-Station mode"));
                                                         embuischedw.detach();} );
         }
+
+        sysData.wifi_sta = false;
         if(_cb_STADisconnected)
             _cb_STADisconnected();        // execule callback
         break;
