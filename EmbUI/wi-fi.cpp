@@ -174,7 +174,6 @@ void EmbUI::wifi_connect(const char *ssid, const char *pwd)
     if (ssid){
         String _ssid(ssid); String _pwd(pwd);   // I need objects to pass it to the lambda
         embuischedw.once(WIFI_BEGIN_DELAY, [_ssid, _pwd, this](){
-                    WiFi.disconnect();
                     LOG(printf_P, PSTR("UI WiFi: client connecting to SSID:%s, pwd:%s\n"), _ssid.c_str(), _pwd.c_str());
                     #ifdef ESP32
                         WiFi.disconnect();
@@ -184,7 +183,7 @@ void EmbUI::wifi_connect(const char *ssid, const char *pwd)
 	                embuischedw.detach();
             });
     } else {
-        embuischedw.once(WIFI_BEGIN_DELAY, [this](){ WiFi.disconnect(); sysData.wifi_sta = false; WiFi.begin(); embuischedw.detach();} );
+        embuischedw.once(WIFI_BEGIN_DELAY, [this](){ WiFi.begin(); embuischedw.detach();} );
     }
 }
 
