@@ -151,10 +151,15 @@ void EmbUI::wifi_init(){
     } else {
         LOG(println, F("STA mode"));
         WiFi.mode(WIFI_STA);       // we start in STA mode, esp32 can't set client's hotname in ap/sta
-
+        LOG(println, F("UI WiFi: STA reconecting..."));
     #ifdef ESP8266
         WiFi.hostname(hn);
-        WiFi.begin();   // use internaly stored last known credentials for connection
+        if(WiFi.begin()!=WL_CONNECTED){ // use internaly stored last known credentials for connection
+            LOG(println, F("UI WiFi: Can't connect in STA, starting AP..."));
+            WiFi.disconnect(); // something wrong... starting in AP mode
+            WiFi.mode(WIFI_AP);
+            WiFi.begin();
+        }
     #elif defined ESP32
     	/* this is a weird hack to mitigate DHCP hostname issue
 	     * order of initialization does matter, pls keep it like this till fixed in upstream
@@ -165,7 +170,6 @@ void EmbUI::wifi_init(){
 	    if (!WiFi.setHostname(hn.c_str()))
             LOG(println, F("UI WiFi: Failed to set hostname :("));
     #endif
-        LOG(println, F("UI WiFi: STA reconecting..."));
     }
 }
 
