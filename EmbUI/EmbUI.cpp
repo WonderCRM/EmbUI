@@ -74,27 +74,42 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
 }
 
 void EmbUI::post(JsonObject data){
-    section_handle_t *section = nullptr;
+    section_handle_t *section = new section_handle_t();
+    section->callback = nullptr;       // make sure callback is null
     int count = 0;
     Interface *interf = new Interface(this, &ws, 512);
     interf->json_frame_value();
 
     for (JsonPair kv : data) {
         String key = kv.key().c_str(), val = kv.value();
+        LOG(printf_P, PSTR("DEBUG: Key:val=%s:%s\n"), key.c_str(), val.c_str());
+
         if (val != FPSTR(P_null)) {
+            LOG(printf_P, PSTR("DEBUG: val=%s is not null, add value\n"), val.c_str());
             interf->value(key, val);
             ++count;
         }
 
-        const char *kname = key.c_str();
-        for (int i = 0; !section && i < section_handle.size(); i++) {
-            const char *sname = section_handle[i]->name.c_str();
-            const char *mall = strchr(sname, '*');
-            unsigned len = mall? mall - sname - 1 : strlen(kname);
-            if (strncmp(sname, kname, len) == 0) {
-                section = section_handle[i];
+        // сначала ищем секцию точно совпадающую по имени
+        auto lookup = section_handle.find(key.c_str());
+        if (lookup != section_handle.end()){
+            section->name = lookup->first.c_str();      // вообще это имя здесь нужно только для дебаг лога
+            section->callback = lookup->second;
+            continue;
+        }
+
+        // не нашли точно такуюже секцию, проверяем все ключи на шаблон вида 'section*'
+        for (const auto& x : section_handle){
+            const char *mall = strchr(x.first.c_str(), '*');
+            if (!mall)
+                continue;
+
+            unsigned len = mall - x.first.c_str() - 1;
+            if (strncmp(x.first.c_str(), key.c_str(), len) == 0) {
+                section->name = x.first.c_str();      // вообще это имя здесь нужно только для дебаг лога
+                section->callback = x.second;
             }
-        };
+        }
     }
 
     if (count) {
@@ -104,11 +119,13 @@ void EmbUI::post(JsonObject data){
     }
     delete interf;
 
-    if (section) {
+    if (section->callback) {
         LOG(printf_P, PSTR("\nUI: POST SECTION: %s\n\n"), section->name.c_str());
         Interface *interf = new Interface(this, &ws);
-        section->callback(interf, &data);
+        section->callback(interf, &data);   // выполняем найденую секцию
+        //section(interf, &data);     
         delete interf;
+        delete section;
     }
 }
 
@@ -122,15 +139,15 @@ void EmbUI::send_pub(){
 void EmbUI::var(const String &key, const String &value, bool force)
 {
     // JsonObject of N element	8 + 16 * N
-    unsigned len = key.length() + value.length() + 16;
-    size_t cap = cfg.capacity(), mem = cfg.memoryUsage();
+    //unsigned len = key.length() + value.length() + 16;
+    //size_t cap = cfg.capacity(), mem = cfg.memoryUsage();
 
-    LOG(printf_P, PSTR("UI WRITE: key (%s) value (%s) "), key.c_str(), value.substring(0, 15).c_str());
-    if (!force && !cfg.containsKey(key)) {
+    LOG(printf_P, PSTR("UI WRITE: key (%s) value (%s)\n"), key.c_str(), value.substring(0, 15).c_str());
+    if (!force && !cfg(key)) {
         LOG(printf_P, PSTR("UI ERROR: KEY (%s) is NOT initialized!\n"), key.c_str());
         return;
     }
-
+/*
     if (cap - mem < len) {
         cfg.garbageCollect();
         LOG(printf_P, PSTR("UI: garbage cfg %u(%u) of %u\n"), mem, cfg.memoryUsage(), cap);
@@ -140,11 +157,11 @@ void EmbUI::var(const String &key, const String &value, bool force)
         LOG(printf_P, PSTR("UI ERROR: KEY (%s) NOT WRITE !!!!!!!!\n"), key.c_str());
         return;
     }
-
-    cfg[key] = value;
+*/
+    cfg.insert(key, value);
     sysData.isNeedSave = true;
 
-    LOG(printf_P, PSTR("UI FREE: %u\n"), cap - cfg.memoryUsage());
+    //LOG(printf_P, PSTR("UI FREE: %u\n"), cap - cfg.memoryUsage());
 
     // if (mqtt_remotecontrol) {
     //     publish(String(F("embui/set/")) + key, value, true);
@@ -153,20 +170,23 @@ void EmbUI::var(const String &key, const String &value, bool force)
 
 void EmbUI::var_create(const String &key, const String &value)
 {
-    if(cfg[key].isNull()){
-        cfg[key] = value;
+    if(!cfg(key)){
+        cfg.insert(key, value);
         LOG(printf_P, PSTR("UI CREATE key: (%s) value: (%s) RAM: %d\n"), key.c_str(), value.substring(0, 15).c_str(), ESP.getFreeHeap());
     }
 }
 
 void EmbUI::section_handle_add(const String &name, buttonCallback response)
 {
+/*
     section_handle_t *section = new section_handle_t;
-    section->name = name;
+    section->name = name.c_str();
     section->callback = response;
     section_handle.add(section);
+*/
+    section_handle.emplace(name.c_str(), response);
 
-    LOG(printf_P, PSTR("UI REGISTER: %s\n"), name.c_str());
+    LOG(printf_P, PSTR("UI REGISTER: %s, total: %d\n"), name.c_str(), section_handle.size());
 }
 
 /**
@@ -175,7 +195,7 @@ void EmbUI::section_handle_add(const String &name, buttonCallback response)
  */
 const char* EmbUI::param(const char* key)
 {
-    const char* value = cfg[key];
+    const char* value = cfg[key].c_str();
     if (value){
         LOG(printf_P, PSTR("UI READ: key (%s) value (%s)\n"), key, value);
     }
@@ -189,15 +209,16 @@ const char* EmbUI::param(const char* key)
  */
 String EmbUI::param(const String &key)
 {
-    String value(param(key.c_str()));
-    return value;
+    //String value(param(key.c_str()));
+    return cfg[key];
 }
 
 String EmbUI::deb()
 {
-    String cfg_str;
-    serializeJson(cfg, cfg_str);
-    return cfg_str;
+    //String cfg_str;
+    //serializeJson(cfg, cfg_str);
+    //return cfg_str;
+    return cfg.json();
 }
 
 void notFound(AsyncWebServerRequest *request) {

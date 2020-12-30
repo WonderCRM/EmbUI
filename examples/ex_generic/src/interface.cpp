@@ -126,14 +126,14 @@ void block_demopage(Interface *interf, JsonObject *data){
 void action_demopage(Interface *interf, JsonObject *data){
     if (!data) return;
 
-    LOG(println, F("porcessig section demo"));
+    LOG(println, F("processig section demo"));
 
     // сохраняем значение 1-й переменной в конфиг фреймворка
     SETPARAM(FPSTR(V_VAR1));
 
     // выводим значение 1-й переменной в serial
     const char *text = (*data)[FPSTR(V_VAR1)];
-    Serial.printf_P(PSTR("Varialble_1 value:%s\n"), text );
+    Serial.printf_P(PSTR("\nVarialble_1 value:%s\n"), text );
 
     // берем указатель на 2-ю переменную
     text = (*data)[FPSTR(V_VAR2)];

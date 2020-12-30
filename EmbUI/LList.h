@@ -307,7 +307,7 @@ T LList<T>::shift(){
 		T ret = root->data;
 		delete(root);
 		root = _next;
-		_size --;
+		--_size;
 		isCached = false;
 
 		return ret;

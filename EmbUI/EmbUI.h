@@ -47,8 +47,10 @@
 
 #include <AsyncMqttClient.h>
 #include "LList.h"
+#include <unordered_map>
 
 #include "timeProcessor.h"
+#include <DictionaryDeclarations.h>
 
 #define AUTOSAVE_TIMEOUT    15      // configuration autosave timer, sec    (4 bit value)
 #define UDP_PORT            4243    // UDP server port
@@ -66,7 +68,7 @@
 #endif
 
 #ifndef __CFGSIZE
-#define __CFGSIZE (2048)
+#define __CFGSIZE (32)          // default number of elements in config dictionary
 #endif
 
 
@@ -76,7 +78,7 @@ class Interface;
 #define TOGLE_STATE(val, curr) (val == FPSTR(P_true))? true : (val == FPSTR(P_false))? false : !curr;
 
 #define SETPARAM(key, call...) if (data->containsKey(key)) { \
-    embui.var(key, (*data)[key]); \
+    embui.var(String(key), (*data)[key]); \
     call; \
 }
 
@@ -162,7 +164,7 @@ class EmbUI
         bool LED_INVERT:1;
         bool shouldReboot:1; // OTA update reboot flag
         uint8_t LED_PIN:5; // [0...30]
-        uint8_t asave:4; // зачем так часто записывать конфиг? Ставлю раз в 15 секунд, вместо раза в секунду [0...15]
+        uint8_t asave:4;    // config save timer (2^4)=16 sec MAX
     };
     uint32_t flags; // набор битов для конфига
     _BITFIELDS() {
@@ -176,7 +178,7 @@ class EmbUI
         shouldReboot = false; // OTA update reboot flag
         cfgCorrupt = false;
         LED_PIN = 31; // [0...30]
-        asave = AUTOSAVE_TIMEOUT; // зачем так часто записывать конфиг? Ставлю раз в 13 секунд, вместо раза в секунду [0...15]
+        asave = AUTOSAVE_TIMEOUT; // 4 бита => [0...15] секунд
     }
     } BITFIELDS;
     //#pragma pack(pop)
@@ -189,8 +191,9 @@ class EmbUI
       buttonCallback callback;
     } section_handle_t;
 
-    DynamicJsonDocument cfg;
-    LList<section_handle_t*> section_handle;
+    Dictionary cfg;
+    //LList<section_handle_t*> section_handle;
+    std::unordered_map<std::string, buttonCallback> section_handle;
     AsyncMqttClient mqttClient;
 
   public:
@@ -217,8 +220,8 @@ class EmbUI
     void section_handle_add(const String &btn, buttonCallback response);
     const char* param(const char* key);
     String param(const String &key);
-    bool isparamexists(const char* key){ return cfg.containsKey(key);}
-    bool isparamexists(const String &key){ return cfg.containsKey(key);}
+    bool isparamexists(const char* key){ return cfg(key);}
+    bool isparamexists(const String &key){ return cfg(key);}
     void led(uint8_t pin, bool invert);
     String deb();
     void init();
@@ -412,6 +415,14 @@ class EmbUI
       return s;
     }
 #endif
+
+    /**
+     * Try to open file for read/write
+     * return true on success, false on error
+     * if read - returns false if file size is zero 
+     */
+    bool openfile(const char *_path, File& _handler, const char *mode);
+
 };
 
 // Глобальный объект фреймворка

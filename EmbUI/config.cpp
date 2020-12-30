@@ -33,20 +33,21 @@ void EmbUI::save(const char *_cfg, bool force){
         configFile = LittleFS.open(_cfg, "w"); // PSTR("w") использовать нельзя, будет исключение!
     }
 
-    String cfg_str;
-    serializeJson(cfg, cfg_str);
-    if(cfg_str.length())
-        configFile.print(cfg_str);
+    //String cfg_str;
+    //serializeJson(cfg, cfg_str);
+    if(cfg.jsize())
+        configFile.print(cfg.json());
     configFile.close();
 
     //cfg.garbageCollect(); // несколько раз ловил Exception (3) предположительно тут, возвращаю пока проверенный способ
     
-    delay(DELAY_AFTER_FS_WRITING); // задержка после записи    
+/*    delay(DELAY_AFTER_FS_WRITING); // задержка после записи    
     DeserializationError error;
     error = deserializeJson(cfg, cfg_str); // произошла ошибка, пытаемся восстановить конфиг
     if (error){
         load(_cfg);
     }
+*/
     sysData.isNeedSave = false;
 }
 
@@ -59,22 +60,37 @@ void EmbUI::autosave(){
 }
 
 void EmbUI::load(const char *_cfg){
-    uint8_t retry_cnt = 0;
+    
+    File configFile;
+    String path = _cfg ? String(_cfg) : String(FPSTR(P_cfgfile));
+    char mode[] = "r";
 
-    while(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) && retry_cnt<5){
-        LOG(println, F("UI: Can't initialize LittleFS"));
-        retry_cnt++;
-        delay(100);
-        //return;
+    if (!openfile(path.c_str(), configFile, mode) ){    // 0x72 stands for asci 'r'
+        path = FPSTR(P_cfgfile_bkp);    // в случае ошибки пробуем восстановить конфиг из резервной копии
+        if (!openfile(path.c_str(), configFile, mode)){  // 0x72 stands for asci 'r'
+            LOG(println, F("UI: Fatal error - can't read from either config or backup file"));
+            return;
+        }
     }
 
-    if(retry_cnt==5 && !LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
-        LOG(println, F("UI: Fatal error - can't initialize LittleFS"));
+    byte* buff = nullptr;
+    buff = (uint8_t*)malloc(configFile.size()+1);
+
+    if (!buff){
+        LOG(printf_P, PSTR("UI: Fatal error - can't allocate buffer memory %d\n"), configFile.size());
         return;
     }
-    
-    File configFile = _cfg ? LittleFS.open(_cfg, "r") : LittleFS.open(FPSTR(P_cfgfile), "r");
+    buff[configFile.size()+1] = '\0';   // make sure buff is terminated with null
 
+    configFile.read(buff, configFile.size());
+    configFile.close();
+
+    cfg.destroy();
+    if (cfg.jload((char *)buff) != 0){
+        LOG(println, F("UI: Error - can't parse json config-file"));        
+    }
+
+/*
     DeserializationError error;
     if (configFile){
         error = deserializeJson(cfg, configFile);
@@ -105,4 +121,33 @@ void EmbUI::load(const char *_cfg){
             LOG(println, error.code());
         }
     }
+*/
+}
+
+/**
+ * Try to open file for read/write
+ * return true on success, false on error
+ * if read - returns false if file size is zero 
+ */
+bool EmbUI::openfile(const char *_path, File& _handler, const char *mode){
+    int8_t retry_cnt = 5;
+
+    // FORMAT_LITTLEFS_IF_FAILED works only for ESP32
+    while(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) && --retry_cnt){
+        if(!retry_cnt){
+            LOG(println, F("UI: Fatal error - can't initialize LittleFS"));
+            return false;
+        }
+        delay(100);
+    }
+
+    _handler = LittleFS.open(_path, mode);
+
+    if (!_handler)
+        return false;
+
+    if (mode[0] == 0x72)   // 0x72 stands for asci 'r'
+        return (bool)_handler.size();
+
+    return true;
 }
