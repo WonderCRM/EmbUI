@@ -133,7 +133,7 @@ void EmbUI::mqtt(const String &host, int port, const String &user, const String 
 }
 
 void EmbUI::mqtt_handle(){
-    String host = cfg[FPSTR(P_m_host)];
+    String host = (*cfg)[FPSTR(P_m_host)];
     if (!sysData.wifi_sta || host.isEmpty()) return;
     if (sysData.mqtt_connect) onMqttConnect();
     mqtt_reconnect();

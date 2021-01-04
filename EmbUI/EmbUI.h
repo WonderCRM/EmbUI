@@ -191,15 +191,22 @@ class EmbUI
       buttonCallback callback;
     } section_handle_t;
 
-    Dictionary cfg;
+    Dictionary *cfg;
     //LList<section_handle_t*> section_handle;
     std::unordered_map<std::string, buttonCallback> section_handle;
     AsyncMqttClient mqttClient;
 
   public:
-    EmbUI() : cfg(__CFGSIZE), section_handle(), server(80), ws("/ws"){
+    EmbUI() : server(80), ws("/ws"){
+        cfg = new Dictionary(__CFGSIZE);
         memset(mc,0,sizeof(mc));
     }
+
+    // default destrustor
+    ~EmbUI(){
+        delete cfg;
+    }
+
     BITFIELDS sysData;
     AsyncWebServer server;
     AsyncWebSocket ws;
@@ -220,8 +227,15 @@ class EmbUI
     void section_handle_add(const String &btn, buttonCallback response);
     const char* param(const char* key);
     String param(const String &key);
-    bool isparamexists(const char* key){ return cfg(key);}
-    bool isparamexists(const String &key){ return cfg(key);}
+
+    /** @brief - returns true if requested key exists in the config
+     */
+    bool isparamexists(const char* key){ return cfg->search(key);}
+
+    /** @brief - returns true if requested key exists in the config
+     */
+    bool isparamexists(const String &key){ return cfg->search(key);}
+
     void led(uint8_t pin, bool invert);
     String deb();
     void init();

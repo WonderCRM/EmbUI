@@ -9,7 +9,7 @@
 #include "EmbUI.h"
 
 #ifdef ESP8266
-  #define IFACE_DYN_JSON_SIZE 3073
+  #define IFACE_DYN_JSON_SIZE 3072
 #elif defined ESP32
   #define IFACE_DYN_JSON_SIZE 8192
 #endif

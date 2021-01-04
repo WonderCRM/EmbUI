@@ -35,8 +35,8 @@ void EmbUI::save(const char *_cfg, bool force){
 
     //String cfg_str;
     //serializeJson(cfg, cfg_str);
-    if(cfg.jsize())
-        configFile.print(cfg.json());
+    if(cfg->jsize())
+        configFile.print(cfg->json());
     configFile.close();
 
     //cfg.garbageCollect(); // несколько раз ловил Exception (3) предположительно тут, возвращаю пока проверенный способ
@@ -85,8 +85,8 @@ void EmbUI::load(const char *_cfg){
     configFile.read(buff, configFile.size());
     configFile.close();
 
-    cfg.destroy();
-    if (cfg.jload((char *)buff) != 0){
+    cfg->destroy();
+    if (cfg->jload((char *)buff) != 0){
         LOG(println, F("UI: Error - can't parse json config-file"));        
     }
 

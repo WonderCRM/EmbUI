@@ -82,10 +82,10 @@ void EmbUI::post(JsonObject data){
 
     for (JsonPair kv : data) {
         String key = kv.key().c_str(), val = kv.value();
-        LOG(printf_P, PSTR("DEBUG: Key:val=%s:%s\n"), key.c_str(), val.c_str());
+        LOG(printf_P, PSTR("DEBUG: Key:val = '%s:%s'\n"), key.c_str(), val.c_str());
 
         if (val != FPSTR(P_null)) {
-            LOG(printf_P, PSTR("DEBUG: val=%s is not null, add value\n"), val.c_str());
+            LOG(printf_P, PSTR("DEBUG: val='%s' is not null, add value\n"), val.c_str());
             interf->value(key, val);
             ++count;
         }
@@ -95,7 +95,10 @@ void EmbUI::post(JsonObject data){
         if (lookup != section_handle.end()){
             section->name = lookup->first.c_str();      // вообще это имя здесь нужно только для дебаг лога
             section->callback = lookup->second;
+            LOG(printf_P, PSTR("DEBUG: found section: '%s'!\n"), lookup->first.c_str());
             continue;
+        } else {
+            LOG(println, "exact section not found");
         }
 
         // не нашли точно такуюже секцию, проверяем все ключи на шаблон вида 'section*'
@@ -123,10 +126,42 @@ void EmbUI::post(JsonObject data){
         LOG(printf_P, PSTR("\nUI: POST SECTION: %s\n\n"), section->name.c_str());
         Interface *interf = new Interface(this, &ws);
         section->callback(interf, &data);   // выполняем найденую секцию
-        //section(interf, &data);     
         delete interf;
-        delete section;
+    } else {
+        //LOG(printf_P, PSTR("\nUI: No section found for: %s\n\n"), key.c_str());
+        LOG(printf, "Sec not found, printing full list of %d elements:\n", section_handle.size());
+        if (section_handle.empty()){
+            LOG(println, ", but map is empty!!!");
+        }
+        //section_handle.begin();
+        /*
+        for (const auto &p : section_handle) {
+            LOG(print, ".");
+            LOG(printf, "sec: %s\n", p.first.c_str());
+        }
+        */
+       //
+        for (auto p = section_handle.cbegin(); p != section_handle.cend(); ++p) {
+            LOG(print, ".");
+            LOG(printf, "sec: %s\n", p->first.c_str());
+        }
+        //
+       /*
+       std::for_each(section_handle.begin(), section_handle.end(),
+            [](const )
+       )
+       */
+        /*  C++17 iterator unsupported
+        for (const auto & [key, value ] : section_handle) {
+            LOG(print, ".");
+            LOG(printf, "sec: %s\n", key);
+            //std::cout << p.first << " => " << p.second << '\n';
+        }
+        */
+
     }
+
+    delete section;
 }
 
 void EmbUI::send_pub(){
@@ -142,11 +177,15 @@ void EmbUI::var(const String &key, const String &value, bool force)
     //unsigned len = key.length() + value.length() + 16;
     //size_t cap = cfg.capacity(), mem = cfg.memoryUsage();
 
-    LOG(printf_P, PSTR("UI WRITE: key (%s) value (%s)\n"), key.c_str(), value.substring(0, 15).c_str());
-    if (!force && !cfg(key)) {
+    LOG(printf_P, PSTR("UI UPDATE: key (%s) value (%s)\n"), key.c_str(), value.substring(0, 15).c_str());
+    force ? cfg->insert(key, value) : cfg->update(key, value);
+
+/*
+    if (force){
         LOG(printf_P, PSTR("UI ERROR: KEY (%s) is NOT initialized!\n"), key.c_str());
         return;
     }
+*/
 /*
     if (cap - mem < len) {
         cfg.garbageCollect();
@@ -158,10 +197,9 @@ void EmbUI::var(const String &key, const String &value, bool force)
         return;
     }
 */
-    cfg.insert(key, value);
     sysData.isNeedSave = true;
 
-    //LOG(printf_P, PSTR("UI FREE: %u\n"), cap - cfg.memoryUsage());
+    LOG(printf_P, PSTR("UI CFG mem size: %u\n"), cfg->size());
 
     // if (mqtt_remotecontrol) {
     //     publish(String(F("embui/set/")) + key, value, true);
@@ -170,10 +208,8 @@ void EmbUI::var(const String &key, const String &value, bool force)
 
 void EmbUI::var_create(const String &key, const String &value)
 {
-    if(!cfg(key)){
-        cfg.insert(key, value);
-        LOG(printf_P, PSTR("UI CREATE key: (%s) value: (%s) RAM: %d\n"), key.c_str(), value.substring(0, 15).c_str(), ESP.getFreeHeap());
-    }
+    cfg->emplace(key, value);   // only create missing/new keys, do NOT update existing values (from config.json)
+    LOG(printf_P, PSTR("UI CREATE key: (%s) value: (%s)\n"), key.c_str(), value.substring(0, 15).c_str());
 }
 
 void EmbUI::section_handle_add(const String &name, buttonCallback response)
@@ -185,8 +221,24 @@ void EmbUI::section_handle_add(const String &name, buttonCallback response)
     section_handle.add(section);
 */
     section_handle.emplace(name.c_str(), response);
+    //section_handle.emplace(std::make_pair(name.c_str(), response));
+    /*
+    section_handle.emplace(std::piecewise_construct,
+            std::forward_as_tuple(name.c_str()),
+            std::forward_as_tuple(response));
+    */
 
     LOG(printf_P, PSTR("UI REGISTER: %s, total: %d\n"), name.c_str(), section_handle.size());
+
+        auto lookup = section_handle.find(name.c_str());
+        if (lookup != section_handle.end()){
+            //section->name = lookup->first.c_str();      // вообще это имя здесь нужно только для дебаг лога
+            //section->callback = lookup->second;
+            LOG(printf_P, PSTR("DEBUG: key registered: %s\n"), lookup->first.c_str());
+        } else {
+            LOG(println, "was unable to reg key!!!");
+        }
+
 }
 
 /**
@@ -195,7 +247,7 @@ void EmbUI::section_handle_add(const String &name, buttonCallback response)
  */
 const char* EmbUI::param(const char* key)
 {
-    const char* value = cfg[key].c_str();
+    const char* value = (*cfg)[key].c_str();
     if (value){
         LOG(printf_P, PSTR("UI READ: key (%s) value (%s)\n"), key, value);
     }
@@ -209,16 +261,13 @@ const char* EmbUI::param(const char* key)
  */
 String EmbUI::param(const String &key)
 {
-    //String value(param(key.c_str()));
-    return cfg[key];
+    LOG(printf_P, PSTR("UI READ: key (%s) value (%s)\n"), key.c_str(), (*cfg)[key].c_str());
+    return (*cfg)[key];
 }
 
 String EmbUI::deb()
 {
-    //String cfg_str;
-    //serializeJson(cfg, cfg_str);
-    //return cfg_str;
-    return cfg.json();
+    return cfg->json();
 }
 
 void notFound(AsyncWebServerRequest *request) {
